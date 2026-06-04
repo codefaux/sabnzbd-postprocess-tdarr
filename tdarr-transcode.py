@@ -2,6 +2,7 @@
 
 import os
 import sys
+import time
 from pathlib import Path
 
 try:
@@ -60,6 +61,8 @@ output_staging_path: Path = output_parent_path / staging_name
 
 output_final_path: Path = output_parent_path / nonstaging_name
 
+output_final_path.mkdir(parents=True, exist_ok=True)
+
 VIDEO_EXTENSIONS = {
     ".mp4",
     ".mkv",
@@ -75,22 +78,78 @@ VIDEO_EXTENSIONS = {
     ".m2ts",
 }
 
+WAIT_TIMEOUT_SECONDS = 60 * 60  # 1 hour
+POLL_INTERVAL_SECONDS = 5
+
+
+def hardlink(src: Path, dst: Path) -> None:
+    try:
+        # if dst.exists():
+        #     dst.unlink()
+
+        os.link(src, dst)
+    except OSError as e:
+        print(f"Failed linking {src} -> {dst}: {e}")
+        sys.exit(1)
+
+
+video_inputs: list[Path] = []
+non_video_inputs: list[Path] = []
+
 for entry in completed_path.iterdir():
     if not entry.is_file():
         continue
 
-    if entry.suffix.lower() not in VIDEO_EXTENSIONS:
-        continue
+    if entry.suffix.lower() in VIDEO_EXTENSIONS:
+        video_inputs.append(entry)
+    else:
+        non_video_inputs.append(entry)
 
-    destination = target_path / entry.name
+#
+# Wait for all transcoded MKVs to appear.
+#
+expected_outputs: dict[Path, Path] = {}
 
-    try:
-        # if destination.exists():
-        #     destination.unlink()
+for source_video in video_inputs:
+    expected_mkv = output_staging_path / source_video.with_suffix(".mkv").name
+    expected_outputs[source_video] = expected_mkv
 
-        os.link(entry, destination)
-    except OSError:
+deadline = time.time() + WAIT_TIMEOUT_SECONDS
+
+while True:
+    missing = [
+        output_file
+        for output_file in expected_outputs.values()
+        if not output_file.is_file()
+    ]
+
+    if not missing:
+        break
+
+    if time.time() >= deadline:
+        print("Timed out waiting for transcoded outputs:")
+        for path in missing:
+            print(f"  {path}")
         sys.exit(1)
 
+    time.sleep(POLL_INTERVAL_SECONDS)
 
-sys.exit(0)  # Clean exit
+#
+# Link transcoded video files.
+#
+for transcoded_file in expected_outputs.values():
+    hardlink(
+        transcoded_file,
+        output_final_path / transcoded_file.name,
+    )
+
+#
+# Link original non-video files.
+#
+for source_file in non_video_inputs:
+    hardlink(
+        source_file,
+        output_final_path / source_file.name,
+    )
+
+sys.exit(0)
