@@ -134,6 +134,7 @@ for source_video in video_inputs:
     expected_outputs[source_video] = expected_mkv
 
 deadline = time.time() + WAIT_TIMEOUT_SECONDS
+wait_start = time.monotonic()
 
 while True:
     missing = [
@@ -152,6 +153,13 @@ while True:
         sys.exit(1)
 
     time.sleep(POLL_INTERVAL_SECONDS)
+
+time.sleep(POLL_INTERVAL_SECONDS * 2)
+
+wait_duration = int(time.monotonic() - wait_start)
+
+many_minutes, process_seconds = divmod(wait_duration, 60)
+process_hours, process_minutes = divmod(many_minutes, 60)
 
 #
 # Link transcoded video files.
@@ -188,5 +196,7 @@ if input_nonstaging_target_path.exists():
     input_nonstaging_target_path.rmdir()
 if output_staging_watch_path.exists():
     output_staging_watch_path.rmdir()
+
+print(f"Tdarr took {process_hours:02}:{process_minutes:02}:{process_seconds:02}")
 
 sys.exit(0)
