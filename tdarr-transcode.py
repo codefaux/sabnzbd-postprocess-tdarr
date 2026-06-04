@@ -118,6 +118,8 @@ for entry in completed_path.iterdir():
         continue
 
     if entry.suffix.lower() in VIDEO_EXTENSIONS:
+        destination = input_nonstaging_target_path / entry.name
+        hardlink(entry, destination)
         video_inputs.append(entry)
     else:
         non_video_inputs.append(entry)
@@ -128,7 +130,7 @@ for entry in completed_path.iterdir():
 expected_outputs: dict[Path, Path] = {}
 
 for source_video in video_inputs:
-    expected_mkv = output_staging_path / source_video.with_suffix(".mkv").name
+    expected_mkv = output_staging_watch_path / source_video.with_suffix(".mkv").name
     expected_outputs[source_video] = expected_mkv
 
 deadline = time.time() + WAIT_TIMEOUT_SECONDS
@@ -159,6 +161,8 @@ for transcoded_file in expected_outputs.values():
         transcoded_file,
         output_final_path / transcoded_file.name,
     )
+    transcoded_file.unlink()
+    transcoded_file.parent.rmdir()
 
 #
 # Link original non-video files.
@@ -168,5 +172,21 @@ for source_file in non_video_inputs:
         source_file,
         output_final_path / source_file.name,
     )
+    source_file.unlink()
+    source_file.parent.rmdir()
+
+#
+# Remove original video files.
+#
+for input_file in video_inputs:
+    input_file.unlink()
+    input_file.parent.rmdir()
+
+if completed_path.exists():
+    completed_path.rmdir()
+if input_nonstaging_target_path.exists():
+    input_nonstaging_target_path.rmdir()
+if output_staging_watch_path.exists():
+    output_staging_watch_path.rmdir()
 
 sys.exit(0)
