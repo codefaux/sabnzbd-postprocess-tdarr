@@ -2,7 +2,7 @@
 
 ## Intent
 
-# Intended workflow
+### Intended workflow
 
 ```
 sabnzbd > tdarr > sonarr > emby
@@ -12,7 +12,7 @@ sabnzbd > tdarr > sonarr > emby
 - tdarr transcodes videos from input folder to output folder
 - sonarr/radarr moves videos from tdarr output to library
 
-# The problem
+### The problem
 
 - sometimes files disappear mysteriously, cause unknown
  (suspect multi-file downloads, tdarr transcodes one file, sees no more, erases directory?)
@@ -21,7 +21,7 @@ sabnzbd > tdarr > sonarr > emby
  (tdarr has various "move all files" options but I suspect those contribute to 'files disappear' in edge cases)
 - sabnzbd collects completed downloads because junk/unimported files/folders still exist
 
-# The solution
+### The solution
 
 This project is a pair of post-processing scripts which can be used with sabnzbd.
 
@@ -39,10 +39,10 @@ Many things are hard-coded as they are either a) expected container layout for s
 
 The following must be true:
 
-sabnzbd downloads go to `/<any>/in/<library>-staging`
-tdarr library watches `/<any>/in/<library>`
-tdarr outputs to `/<any>/out/<library>-staging`
-*arr watches `/<any>/out/<library>`
+- sabnzbd downloads go to `/<any>/in/<library>-staging`
+- tdarr library watches `/<any>/in/<library>`
+- tdarr outputs to `/<any>/out/<library>-staging`
+- *arr watches `/<any>/out/<library>`
 
 `/<any>/in` and `/<any>/out` and paths within are all on the same mount. No Docker volumes per `in`/`out` or per-library.
 (This is the weakest requirement and only requires some minor rewrite, but for now remains a requirement.)
