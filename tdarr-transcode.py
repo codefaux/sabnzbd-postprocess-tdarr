@@ -1,82 +1,77 @@
 #!/usr/bin/python3
 
+import logging
 import os
 import sys
 import time
 from pathlib import Path
 
-# try:
-#     (
-#         scriptname,
-#         directory,
-#         orgnzbname,
-#         jobname,
-#         reportnumber,
-#         category,
-#         group,
-#         postprocstatus,
-#         url,
-#     ) = sys.argv
-# except Exception:
-#     print(
-#         "No SAB compliant number of commandline parameters found (should be 8):",
-#         len(sys.argv) - 1,
-#     )
-#     sys.exit(1)  # non-zero return code
+pid = os.getpid()
+log_path = f"/config/logs/tdarr-transcode-{pid}.log"
+
+logging.basicConfig(
+    level=logging.INFO,
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(log_path),
+    ],
+    format="%(asctime)s [PID %(process)d] %(message)s",
+)
 
 if os.environ.get("SAB_FAIL_MSG"):
-    print("SAB_FAIL_MSG indicates error. Not running.")
+    logging.error("SAB_FAIL_MSG indicates error. Not running.")
     sys.exit(0)
 
 complete_dir_str: str = os.environ.get("SAB_COMPLETE_DIR") or ""
 if not complete_dir_str:
-    print("SAB_COMPLETE_DIR not present.")
+    logging.error("SAB_COMPLETE_DIR not present.")
     sys.exit(1)
 
+logging.info("- Begin\n\n")
 
 completed_path: Path = Path(complete_dir_str)
-print("completed_path: ", completed_path)
+logging.info(f"completed_path: {completed_path}")
 
 staging_path: Path = completed_path.parent
-print("staging_path: ", staging_path)
+logging.info(f"staging_path: {staging_path}")
 
 child_name: str = completed_path.name
-print("child_name: ", child_name)
+logging.info(f"child_name: {child_name}")
 
 staging_name: str = staging_path.name
-print("staging_name: ", staging_name)
+logging.info(f"staging_name: {staging_name}")
 
 staging_suffix: str = "-staging"
-print("staging_suffix: ", staging_suffix)
+logging.info(f"staging_suffix: {staging_suffix}")
 
 nonstaging_name: str = staging_name[: -len(staging_suffix)]
-print("nonstaging_name: ", nonstaging_name)
+logging.info(f"nonstaging_name: {nonstaging_name}")
 
 if not staging_name.endswith(staging_suffix):
-    print(staging_path)
-    print("- Does not appear to be a staging directory.")
+    logging.error(f"- Does not appear to be a staging directory. '{staging_path}'")
     sys.exit(1)
 
 input_path: Path = staging_path.parent
-print("input_path: ", input_path)
+logging.info(f"input_path: {input_path}")
 if not input_path.name.lower() == "in":
-    print(input_path)
-    print("Path structure incorrect; 'in' expected.")
+    logging.error(f"- Path structure incorrect; 'in' expected. '{input_path}'")
     sys.exit(1)
 
 input_nonstaging_target_path: Path = input_path / nonstaging_name / child_name
-print("input_nonstaging_target_path: ", input_nonstaging_target_path)
+logging.info(f"input_nonstaging_target_path: {input_nonstaging_target_path}")
 
 input_nonstaging_target_path.mkdir(parents=True, exist_ok=True)
 
 output_path: Path = input_path.parent / "out"
-print("output_path: ", output_path)
+logging.info(f"output_path: {output_path}")
 
 output_staging_watch_path: Path = output_path / staging_name / child_name
-print("output_staging_watch_path: ", output_staging_watch_path)
+logging.info(f"output_staging_watch_path: {output_staging_watch_path}")
 
 output_final_path: Path = output_path / nonstaging_name / child_name
-print("output_final_path: ", output_final_path)
+logging.info(f"output_final_path: {output_final_path}")
+
+logging.info("\n")
 
 output_final_path.mkdir(parents=True, exist_ok=True)
 
@@ -106,23 +101,32 @@ def hardlink(src: Path, dst: Path) -> None:
 
         os.link(src, dst)
     except OSError as e:
-        print(f"Failed linking {src} -> {dst}: {e}")
+        logging.info(f"Failed linking {src} -> {dst}: {e}")
         sys.exit(1)
 
 
 video_inputs: list[Path] = []
 non_video_inputs: list[Path] = []
 
-for entry in completed_path.iterdir():
-    if not entry.is_file():
-        continue
+if completed_path.exists():
+    for entry in completed_path.iterdir():
+        if not entry.is_file():
+            continue
 
-    if entry.suffix.lower() in VIDEO_EXTENSIONS:
-        destination = input_nonstaging_target_path / entry.name
-        hardlink(entry, destination)
-        video_inputs.append(entry)
-    else:
-        non_video_inputs.append(entry)
+        if entry.suffix.lower() in VIDEO_EXTENSIONS:
+            logging.info(
+                "hardlinking input staging file to nonstaging path\n"
+                f"- in: '{entry}'\n- out: '{input_nonstaging_target_path}'"
+            )
+            destination = input_nonstaging_target_path / entry.name
+            hardlink(entry, destination)
+            video_inputs.append(entry)
+        else:
+            logging.info(
+                "found input non-video file\n"
+                f"- file: '{input_nonstaging_target_path}'"
+            )
+            non_video_inputs.append(entry)
 
 #
 # Wait for all transcoded MKVs to appear.
@@ -131,10 +135,13 @@ expected_outputs: dict[Path, Path] = {}
 
 for source_video in video_inputs:
     expected_mkv = output_staging_watch_path / source_video.with_suffix(".mkv").name
+    logging.info(f"- expecting:\n- in: '{source_video}'\n- out: '{expected_mkv}'")
     expected_outputs[source_video] = expected_mkv
 
 deadline = time.time() + WAIT_TIMEOUT_SECONDS
 wait_start = time.monotonic()
+
+logging.info("- Waiting ...\n")
 
 while True:
     missing = [
@@ -147,14 +154,16 @@ while True:
         break
 
     if time.time() >= deadline:
-        print("Timed out waiting for transcoded outputs:")
+        logging.error("Timed out waiting for transcoded outputs:")
         for path in missing:
-            print(f"  {path}")
+            logging.error(f"- '{path}'")
         sys.exit(1)
 
     time.sleep(POLL_INTERVAL_SECONDS)
 
 time.sleep(POLL_INTERVAL_SECONDS * 2)
+
+logging.info("Found all expected files.\n")
 
 wait_duration = int(time.monotonic() - wait_start)
 
@@ -165,6 +174,10 @@ process_hours, process_minutes = divmod(many_minutes, 60)
 # Link transcoded video files.
 #
 for transcoded_file in expected_outputs.values():
+    logging.info(
+        "Moving transcoded file to output final path\n"
+        f"- file: '{transcoded_file}'\n- to: '{output_final_path}'"
+    )
     hardlink(
         transcoded_file,
         output_final_path / transcoded_file.name,
@@ -176,6 +189,10 @@ for transcoded_file in expected_outputs.values():
 # Link original non-video files.
 #
 for source_file in non_video_inputs:
+    logging.info(
+        "Moving source file to output final path\n"
+        f"- file '{source_file}'\n- to: '{output_final_path}'"
+    )
     hardlink(
         source_file,
         output_final_path / source_file.name,
@@ -186,17 +203,33 @@ for source_file in non_video_inputs:
 #
 # Remove original video files.
 #
-for input_file in video_inputs:
-    input_file.unlink()
-    input_file.parent.rmdir()
+for video_file in video_inputs:
+    logging.info(f"Removing input file\n- file: '{video_file}'")
+    video_file.unlink()
+    video_file.parent.rmdir()
+
+if input_nonstaging_target_path.exists():
+    for input_file in input_nonstaging_target_path.iterdir():
+        logging.info(f"Removing input nonstaging file\n- file: '{input_file}'")
+        input_file.unlink()
+    logging.info(
+        f"Removing input nonstaging path\n- path: '{input_nonstaging_target_path}'"
+    )
+    input_nonstaging_target_path.rmdir()
 
 if completed_path.exists():
+    logging.info(f"Removing input staging path\n- path '{completed_path}'")
     completed_path.rmdir()
-if input_nonstaging_target_path.exists():
-    input_nonstaging_target_path.rmdir()
+
 if output_staging_watch_path.exists():
+    for output_staging_file in output_staging_watch_path.iterdir():
+        logging.info(f"Removing output staging file\n- file: '{output_staging_file}'")
+        output_staging_file.unlink()
+    logging.info(f"Removing output staging path\n- path: '{output_staging_watch_path}'")
     output_staging_watch_path.rmdir()
 
-print(f"Tdarr took {process_hours:02}:{process_minutes:02}:{process_seconds:02}")
+logging.info("Done moving.\n\n")
+
+logging.info(f"Tdarr took {process_hours:02}:{process_minutes:02}:{process_seconds:02}")
 
 sys.exit(0)
