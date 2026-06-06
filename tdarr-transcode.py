@@ -27,13 +27,13 @@ POLL_INTERVAL_SECONDS = 5
 
 def hardlink(src: Path, dst: Path) -> None:
     try:
-        # if dst.exists():
-        #     dst.unlink()
+        if dst.exists():
+            dst.unlink()
 
         os.link(src, dst)
     except OSError as e:
-        logging.info(f"Failed linking {src} -> {dst}: {e}")
-        sys.exit(1)
+        logging.warning(f"Failed linking: {e}")
+        # sys.exit(1)
 
 
 pid = os.getpid()
@@ -197,13 +197,15 @@ for transcoded_file in expected_outputs.values():
         output_final_path / transcoded_file.name,
     )
     transcoded_file.unlink()
-    transcoded_file.parent.rmdir()
+    if not any(transcoded_file.parent.iterdir()):
+        transcoded_file.parent.rmdir()
 
 # Remove original video files (transcoded now)
 for video_file in video_inputs:
     logging.info(f"Removing input file\n- file: '{video_file}'")
     video_file.unlink()
-    video_file.parent.rmdir()
+    if not any(video_file.parent.iterdir()):
+        video_file.parent.rmdir()
 
 # Remove transcoder input if exists
 if input_nonstaging_target_path.exists():
