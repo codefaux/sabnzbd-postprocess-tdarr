@@ -21,6 +21,7 @@ VIDEO_EXTENSIONS = {
     ".m2ts",
 }
 
+
 WAIT_TIMEOUT_SECONDS = 60 * 60  # 1 hour
 POLL_INTERVAL_SECONDS = 5
 
@@ -45,7 +46,7 @@ logging.basicConfig(
         logging.StreamHandler(),
         logging.FileHandler(log_path),
     ],
-    format="%(asctime)s [PID %(process)d] %(message)s",
+    format="%(asctime)s [PID %(process)d] %(message)s\n",
 )
 
 # ensure we have what we need and should be running
