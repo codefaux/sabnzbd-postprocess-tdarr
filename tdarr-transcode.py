@@ -22,6 +22,11 @@ VIDEO_EXTENSIONS = {
 }
 
 
+# full public r/w/X by default
+os.umask(int(os.environ.get("TDARR_SCRIPT_UMASK") or 0))
+DIR_MODE = int(os.environ.get("TDARR_SCRIPT_DMODE") or 0o777)
+FILE_MODE = int(os.environ.get("TDARR_SCRIPT_FMODE") or 0o666)
+
 WAIT_TIMEOUT_SECONDS = 60 * 60  # 1 hour
 POLL_INTERVAL_SECONDS = 5
 
@@ -35,6 +40,11 @@ def hardlink(src: Path, dst: Path) -> None:
     except OSError as e:
         logging.warning(f"Failed linking: {e}")
         # sys.exit(1)
+
+    try:
+        dst.chmod(FILE_MODE)
+    except OSError as e:
+        logging.warning(f"Failed chmod: {e}")
 
 
 pid = os.getpid()
@@ -105,8 +115,8 @@ logging.info(f"output_final_path: {output_final_path}")
 logging.info("\n")
 
 # create our paths
-input_nonstaging_target_path.mkdir(parents=True, exist_ok=True)
-output_final_path.mkdir(parents=True, exist_ok=True)
+input_nonstaging_target_path.mkdir(mode=DIR_MODE, parents=True, exist_ok=True)
+output_final_path.mkdir(mode=DIR_MODE, parents=True, exist_ok=True)
 
 # if download target path exists, iterate video vs non-video files
 video_inputs: list[Path] = []
