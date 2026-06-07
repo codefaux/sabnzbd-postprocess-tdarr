@@ -127,7 +127,7 @@ if completed_path.exists():
 
         if entry.suffix.lower() in VIDEO_EXTENSIONS:
             logging.info(
-                "hardlinking input staging file to nonstaging path\n"
+                "found input staging file, hardlinking to nonstaging path\n"
                 f"- in: '{entry}'\n- out: '{input_nonstaging_target_path}'"
             )
             destination = input_nonstaging_target_path / entry.name
@@ -135,7 +135,7 @@ if completed_path.exists():
             video_inputs.append(entry)
         else:
             logging.info(
-                "found input non-video file\n"
+                "found input non-video file, recording\n"
                 f"- file: '{input_nonstaging_target_path}'"
             )
             non_video_inputs.append(entry)
@@ -165,7 +165,7 @@ while True:
         break
 
     if time.time() >= deadline:
-        logging.error("Timed out waiting for transcoded outputs:")
+        logging.error("Timeout waiting for transcoded outputs:")
         for path in missing:
             logging.error(f"- '{path}'")
         sys.exit(1)
