@@ -33,10 +33,8 @@ POLL_INTERVAL_SECONDS = 5
 
 def hardlink(src: Path, dst: Path) -> None:
     try:
-        if dst.exists():
-            dst.unlink()
-
-        os.link(src, dst)
+        dst.unlink(missing_ok=True)
+        src.hardlink_to(dst)
     except OSError as e:
         logging.warning(f"Failed linking: {e}")
         # sys.exit(1)
